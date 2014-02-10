@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import getopt, os, platform, subprocess, sys
+import getopt, imp, os, platform, shutil, subprocess, sys
 
-version  = "0.0.4"
+version  = "0.0.6"
 imageExt = [[".jpg", "image/jpeg"], [".png", "image/png"], [".gif", "image/gif"]]
 USE_MUTAGEN = "false"
 USE_FIRST_IMAGE_FOUND = "false"
@@ -11,8 +11,15 @@ CMD_EYED3 = "eyeD3"
 CMD_ID3 = "id3v2"
 DEBUG_FLAG = "false"
 DEFAULT_RESOLUTION = "600x600"
+albumArtJpg = "AlbumArt.jpg"
 coverJpg = "cover-embed-" + DEFAULT_RESOLUTION + ".jpg"
 coverPng = "cover-embed-" + DEFAULT_RESOLUTION + ".png"
+
+def createAlbumArtJpg(directory, originalImage, imageType):
+  if ("image/jpeg" == imageType):
+    albumArtPathName = os.path.join(directory, albumArtJpg)
+    albumArtPathName = os.path.normpath(albumArtPathName)
+    shutil.copy2(originalImage, albumArtPathName)
 
 #######################################################################
 #
@@ -23,10 +30,13 @@ coverPng = "cover-embed-" + DEFAULT_RESOLUTION + ".png"
 # list of files in the current directory
 #
 def find(arg, dirname, names):
+  debug ("Examining '" + dirname + "'")
+  debug ("File List: '" + ', '.join(names) + "'")
   foundMp3 = "false"
   for item in names:
     pathname = os.path.join(dirname, item)
     pathname = os.path.normpath(pathname)
+    debug("pathname: '" + pathname + "'")
     fileExtension = os.path.splitext( item )
     if os.path.isfile(pathname) and fileExtension[1].lower() == arg:
       debug("Found " + arg + " in " + dirname)
@@ -44,6 +54,9 @@ def find(arg, dirname, names):
     debug("No acceptable image found for " + dirname)
     return;
   
+  debug("Image to use #1: " + fullCoverJpg[0])
+  createAlbumArtJpg(dirname, fullCoverJpg[0], fullCoverJpg[1])
+  
   # 2) Loop through contents and determine
   # if it is a file or a directory. Directories
   # can be skipped. Whereas for files, we'll
@@ -55,13 +68,14 @@ def find(arg, dirname, names):
     pathname = os.path.join(pathname, item)
     pathname = os.path.normpath(pathname)
     if os.path.isfile(pathname) and pathname.lower().find(arg)>0:
+      debug("Image to use #2: " + fullCoverJpg[0])
       embedReturnCode = embedImage(pathname, fullCoverJpg)
       if 0 < embedReturnCode:
         badAudioFiles.append(pathname)
   if 0 < len(badAudioFiles):
-    print "Errors occurred embedding images in the following files:"
+    print("Errors occurred embedding images in the following files:")
     sys.stdout.write(" * ")
-    print "\n\r * ".join(badAudioFiles)
+    print("\n\r * ".join(badAudioFiles))
 
 #######################################################################
 #
@@ -85,10 +99,12 @@ def findImage(directory, filenames):
     # if it is already a JPG, just make a copy. Otherwise do a
     # do a conversion
     if desiredImage == "":
-      print >> sys.stderr, "no image found in " + directory
+      print("no image found in " + directory, file=sys.stderr)
     elif USE_FIRST_IMAGE_FOUND == "true":
+      debug("Not changing image resolution.")
       imageFileToUse = desiredImage
     elif len(desiredImage[0]) > 0:
+      debug("Shrinking image to " + DEFAULT_RESOLUTION)
       imageFileToUse = convertImage(directory, desiredImage[0], coverJpg)
     # by virtue of making it out of the loop, we have admitted that
     # no acceptable image was present.
@@ -107,8 +123,8 @@ def guessImageFile(directory, filenames):
     for extension,mime in imageExt:
       fileExtension = os.path.splitext( aFile )
       if fileExtension[1].lower() ==  extension:
-	debug("Looking at using file: " + aFile + " | Mime Type: " + mime)
-	fullpath = os.getcwd()
+        debug("Looking at using file: " + aFile + " | Mime Type: " + mime)
+        fullpath = os.getcwd()
         fullpath = os.path.join(fullpath, directory)
         fullpath = os.path.join(fullpath, aFile)
         fullpath = os.path.normpath(fullpath)
@@ -159,11 +175,13 @@ def convertImage(directory, foundImage, desiredFilename):
 def embedImage(audiofile, image):
   addReturnCode = 0
   
-  if USE_MUTAGEN:
-    addReturnCode = embedImageViaMutagen(audiofile, image)
-  else:
-    addReturnCode = embedImageViaLinuxCommandLine(audiofile, image)
-
+  #if USE_MUTAGEN:
+  #  addReturnCode = embedImageViaMutagen(audiofile, image)
+  #else:
+  #  addReturnCode = embedImageViaLinuxCommandLine(audiofile, image)
+  
+  addReturnCode = embedImageViaLinuxCommandLine(audiofile, image)
+  
   return addReturnCode
 
 #######################################################################
@@ -172,12 +190,18 @@ def embedImage(audiofile, image):
 #
 def embedImageViaMutagen(audiofile, image):
   returnCode = 0
-  exec "from mutagen.mp3 import MP3"
-  exec "from mutagen.id3 import ID3, APIC, error"
-  audioTags = ID3(audiofile)
+  #exec("from mutagen.mp3 import MP3")
+  print (MUTAGEN_MODULE)
+  #MUTAGEN_MODULE.
+  #from MUTAGEN_MODULE.mp3 import MP3
+  from mutagen import mp3
+  #exec("from mutagen.id3 import ID3, APIC, error")
+  #from MUTAGEN_MODULE.id3 import ID3, APIC, error
+  #audioTags = ID3(audiofile)
+  audioTags = MUTAGEN_MODULE.id3.ID3(audiofile)
   try:
     debug("Adding " + image[0] + " to the file " + audiofile )
-    audioTags.add(APIC(encoding=3, mime=image[1], type=3, desc=u'Cover',data=open(image[0]).read()))
+    audioTags.add(MUTAGEN_MODULE.APIC(encoding=3, mime=image[1], type=3, desc="Cover",data=open(image[0]).read()))
     audioTags.save()
   except error:
     returnCode = 1
@@ -284,22 +308,25 @@ def checkEnvironment():
   #
   try:
     global MUTAGEN_MODULE 
-    MUTAGEN_MODULE = __import__("mutagen")
+    #MUTAGEN_MODULE = __import__(mutagen)
+    MUTAGEN_MODULE = imp.new_module('mutagen')
     debug(MUTAGEN_MODULE)
-    USE_MUTAGEN = "true"
+    #sys.modules['mutagen'] = MUTAGEN_MODULE
+    #USE_MUTAGEN = "true"
     debug("Able to dynamically load mutagen")
-  except:
+  except err:
     debug("Unable to dynamically load mutagen")
-    if "Linux" <> platform.system():
-      print >> sys.stderr, "*********************************************************"
-      print >> sys.stderr, "***            Environment Check Failed!              ***"
-      print >> sys.stderr, "***                                                   ***"
-      print >> sys.stderr, "               mutagen must be installed"
-      print >> sys.stderr, "***                                                   ***"
-      print >> sys.stderr, "            http://code.google.com/p/mutagen/"
-      print >> sys.stderr, "***                                                   ***"
-      print >> sys.stderr, "*********************************************************"
-      print
+    print(err, file=sys.stderr)
+    if "Linux" != platform.system():
+      print("*********************************************************", file=sys.stderr)
+      print("***            Environment Check Failed!              ***", file=sys.stderr)
+      print("***                                                   ***", file=sys.stderr)
+      print("               mutagen must be installed", file=sys.stderr)
+      print("***                                                   ***", file=sys.stderr)
+      print("            http://code.google.com/p/mutagen/", file=sys.stderr)
+      print("***                                                   ***", file=sys.stderr)
+      print("*********************************************************", file=sys.stderr)
+      print()
       sys.exit(1)
     #
     # fallback 'raw' method, look for the appropriate command-line utilities
@@ -307,6 +334,8 @@ def checkEnvironment():
     checkEnvironmentHelper([CMD_EYED3, "--help"])
     checkEnvironmentHelper([CMD_ID3])
   if "Linux" == platform.system():
+    checkEnvironmentHelper([CMD_EYED3, "--help"])
+    checkEnvironmentHelper([CMD_ID3])
     checkEnvironmentHelper([CMD_CONVERT])
   else:
     global USE_FIRST_IMAGE_FOUND
@@ -317,13 +346,14 @@ def checkEnvironment():
 # Helper method for displaying errors about some simple command-line
 # environment checks (for Linux)
 #
-def checkEnvironmentHelper(command):  
+def checkEnvironmentHelper(command): 
+  debug("* Checking for '" + command[0] + "'");
   if 0 < shellCommandWrapper(command):
-    print >> sys.stderr, "*********************************************************"
-    print >> sys.stderr, "***            Environment Check Failed!              ***"
-    print >> sys.stderr, " Unable to locate '" + command[0] + "' in the PATH"
-    print >> sys.stderr, "*********************************************************"
-    print
+    print("*********************************************************", file=sys.stderr)
+    print("***            Environment Check Failed!              ***", file=sys.stderr)
+    print(" Unable to locate '" + command[0] + "' in the PATH", file=sys.stderr)
+    print("*********************************************************", file=sys.stderr)
+    print()
  
 #######################################################################
 #
@@ -331,7 +361,7 @@ def checkEnvironmentHelper(command):
 #
 def debug(message):
   if DEBUG_FLAG == "true":
-    print message
+    print(message)
 
 #######################################################################
 #
@@ -342,6 +372,9 @@ def shellCommandWrapper(command):
   process = subprocess.Popen(command, shell=False, bufsize=1, \
             stdin=None, stdout=FNULL, stderr=FNULL)
   process.wait()
+  
+  debug("Shell command return code: " + str(process.returncode))
+  
   return process.returncode
   
 #######################################################################
@@ -349,13 +382,13 @@ def shellCommandWrapper(command):
 # Print Usage Information
 #
 def usage():
-  print
-  print "This script takes one or more arguments that are expected to be a "     + \
+  print()
+  print("This script takes one or more arguments that are expected to be a "     + \
         "a single directory or set of directories. For each argument supplied, " + \
         "the script will recurse into the directory and look for an image file. If a " + \
         "file is found, it will be converted to the default resolution (" + DEFAULT_RESOLUTION + \
         "). The script will then look for any MP3s in the directory. If found, the " + \
-        "image will be embedded into each file (overwriting an existing embedded image)."
+        "image will be embedded into each file (overwriting an existing embedded image).")
 
 #######################################################################
 #
@@ -370,9 +403,9 @@ def main():
   try:
     opts, args = getopt.getopt(sys.argv[1:], "hd", ["help", "debug", \
                                "use-first-image", "use-mutagen"])
-  except getopt.GetoptError, err:
+  except getopt.GetoptError as err:
     # print help information and exit:
-    print >> sys.stderr, err
+    print(err, file=sys.stderr)
     usage()
     sys.exit(2)
   #######################################################################
@@ -400,12 +433,27 @@ def main():
   # structure and embed artwork into any discovered MP3 files.
   #
   if len(args) == 0:
-    print >> sys.stderr, "Missing command-line arguments"
+    print ("Missing command-line arguments", file=sys.stderr)
     usage()
   else:
     checkEnvironment()
     for directory in args:
-      os.path.walk(directory, find, ".mp3")
+      debug ("Walk parent directory + '" + directory + "'")
+      #os.walk(directory, find, ".mp3")
+      for root, embedDirs, files in os.walk(directory):
+        debug("root: " + root)
+        debug("files: " + "|".join(files))
+        
+        #Handle files
+        debug ("Process files in directory + '" + root +"'")
+        find(".mp3", root, files)
+        
+        # Handle directories
+        #debug ("Process directories in directory + '" + root +"'")
+        #for embedDir in embedDirs:
+        #  for name in files:
+        #    find(".mp3", embedDir, name)
+
 
 if __name__ == "__main__":
     main()
