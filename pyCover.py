@@ -439,7 +439,6 @@ def main():
     checkEnvironment()
     for directory in args:
       debug ("Walk parent directory + '" + directory + "'")
-      #os.walk(directory, find, ".mp3")
       for root, embedDirs, files in os.walk(directory):
         debug("root: " + root)
         debug("files: " + "|".join(files))
