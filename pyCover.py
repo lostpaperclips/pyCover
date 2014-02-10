@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import getopt, imp, os, platform, shutil, subprocess, sys
 
-version  = "0.0.6"
+version  = "0.0.7"
 imageExt = [[".jpg", "image/jpeg"], [".png", "image/png"], [".gif", "image/gif"]]
 USE_MUTAGEN = "false"
 USE_FIRST_IMAGE_FOUND = "false"
@@ -10,7 +10,7 @@ CMD_CONVERT = "convert"
 CMD_EYED3 = "eyeD3"
 CMD_ID3 = "id3v2"
 DEBUG_FLAG = "false"
-DEFAULT_RESOLUTION = "600x600"
+DEFAULT_RESOLUTION = "800x800"
 albumArtJpg = "AlbumArt.jpg"
 coverJpg = "cover-embed-" + DEFAULT_RESOLUTION + ".jpg"
 coverPng = "cover-embed-" + DEFAULT_RESOLUTION + ".png"
